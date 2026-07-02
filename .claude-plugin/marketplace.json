@@ -1,0 +1,20 @@
+{
+  "name": "cascade-marketplace",
+  "description": "Marketplace for the cascade plugin — a cost-optimised multi-model pipeline for Claude Code.",
+  "owner": {
+    "name": "Jason Kneen",
+    "url": "https://github.com/jasonkneen"
+  },
+  "plugins": [
+    {
+      "name": "cascade",
+      "description": "Cost-optimised multi-model pipeline: Fable analyses once, Opus plans with code citations, Sonnet executes, Haiku does mechanical work.",
+      "version": "1.0.0",
+      "source": "./",
+      "author": {
+        "name": "Jason Kneen",
+        "url": "https://github.com/jasonkneen"
+      }
+    }
+  ]
+}

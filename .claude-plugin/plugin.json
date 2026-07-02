@@ -1,0 +1,15 @@
+{
+  "name": "cascade",
+  "version": "1.0.0",
+  "description": "Cost-optimised multi-model pipeline: Fable analyses once, Opus plans with code citations, Sonnet executes, Haiku does mechanical work, wired together with a dense machine-readable handoff format.",
+  "author": {
+    "name": "Jason Kneen",
+    "url": "https://github.com/jasonkneen"
+  },
+  "homepage": "https://github.com/jasonkneen/cascade",
+  "repository": "https://github.com/jasonkneen/cascade",
+  "license": "MIT",
+  "keywords": ["multi-agent", "orchestration", "cost-optimization", "subagents", "claude-code", "escalation"],
+  "agents": "./skills/cascade/assets/claude-code/agents",
+  "commands": "./skills/cascade/assets/claude-code/commands"
+}
