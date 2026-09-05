@@ -75,9 +75,9 @@ def repo_name():
     return os.path.basename(os.getcwd())
 
 
-def sum_counters(entries):
+def sum_counters(*entry_lists):
     agg = {}
-    for e in entries:
+    for e in (e for lst in entry_lists for e in lst):
         for k, v in (e.get("counters") or {}).items():
             try:
                 agg[k] = agg.get(k, 0) + int(v)
@@ -196,7 +196,7 @@ def main():
                 for l, m, i, o, g, c in rows
             ],
             "totals": {"in": tin, "out": tout, "cost_usd": round(tcost, 4)},
-            "counters": sum_counters(data.get("stages") or []),
+            "counters": sum_counters(data.get("stages") or [], data.get("escalations") or []),
             "esc_why": esc_why,
             "duration_ms": duration or None,
             "savings": data["computed"]["baseline"],
@@ -215,6 +215,7 @@ def main():
         spend = sum(r["totals"]["cost_usd"] for r in runs)
         modeled = sum(r.get("savings", {}).get("modeled_usd") or 0 for r in runs)
         landed = sum(r.get("counters", {}).get("ok", 0) + r.get("counters", {}).get("adapt", 0)
+                     + r.get("counters", {}).get("took", 0)
                      for r in runs)
         summary = f"logged {args.kind} run -> {path} | lifetime ({len(runs)} cascade runs): ${spend:.2f} spend"
         if spend and modeled:

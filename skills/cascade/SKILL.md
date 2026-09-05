@@ -18,10 +18,10 @@ Humans read exactly one line per stage. Everything else is for the next model.
 
 | Tier | Model ID | Stage | Job |
 |---|---|---|---|
-| F | `claude-fable-5` | ANALYZE | Upfront analysis, high-level recommendations, arbitrate design escalations |
-| O | `claude-opus-4-8` | PLAN | Turn findings into grounded change specs with code citations |
+| F | `claude-fable-5-1` | ANALYZE | Upfront analysis, high-level recommendations, arbitrate design escalations |
+| O | `claude-opus-5` | PLAN | Turn findings into grounded change specs with code citations |
 | S | `claude-sonnet-5` | EXECUTE | Apply changes, verify each, delegate mechanical work |
-| H | `claude-haiku-4-5` | ASSIST | Mechanical edits, bulk operations, fetching context on request |
+| H | `claude-haiku-4-5` | ASSIST, RECON | Mechanical edits, bulk operations, fetching context on request; optional pre-Fable recon sweep on large scope |
 
 When a new family version ships, update this table and nothing else — every prompt and agent file refers to tiers, not models. (Verified current as of 2026-07: Sonnet 5 is GA; Fable 5 rejects an explicit `thinking: {type:"disabled"}` — omit the thinking parameter entirely on API calls.)
 
@@ -40,12 +40,14 @@ The full record grammar, field vocabulary, and a complete worked run live in `re
 Artifacts are plain-text `.cf` files under `cascade/` in the repo. Each stage reads its predecessor's file plus the repo — never chat history.
 
 ```
-cascade/00-task.txt → [F] 10-findings.cf → [O] 20-plan.cf → [S/H] 30-changes.cf
-                                                     esc/E*.cf ↔ senior tiers
-                                                     logs/     full command output
+cascade/00-task.txt → [H, optional] 05-recon.cf → [F] 10-findings.cf → [O] 20-plan.cf → [S/H] 30-changes.cf
+                                                                              esc/E*.cf ↔ senior tiers
+                                                                              logs/     full command output
 ```
 
-**Stage F — ANALYZE** (`references/prompts/analyze.md`). Reads the task and the repo. Emits FIND records — severity, locator, what, fix-direction, dependencies, cross-references — plus at most 3 OPEN questions for genuine ambiguity. No code bodies, no diffs, no implementation detail: F's judgment is expensive, so it's spent on *what and why*, never *how*. Soft budget ~600 output tokens.
+**Stage R — RECON** (`references/prompts/recon.md`, optional). Runs only when scope is broad — whole codebase, multi-subsystem, "architecture-level", no bounded diff — the cases where Stage F would otherwise spend its expensive tokens on open-ended Glob/Grep/Read discovery that carries no judgment. Haiku maps the subsystems in scope and greps for risk-pattern candidates from the task's own stated goal, emitting MAP and HIT records — locators only, no severity, no interpretation. F reads this digest instead of exploring blind, and still verifies every HIT against the real code before promoting it to a FIND: recon finds candidates, it never judges them. Skip this stage entirely for normal-sized diffs or features — its fixed cost isn't worth it below a handful of files, and F's own reads are cheap at that scale.
+
+**Stage F — ANALYZE** (`references/prompts/analyze.md`). Reads the task, `05-recon.cf` if present, and the repo. Emits FIND records — severity, locator, what, fix-direction, dependencies, cross-references — plus at most 3 OPEN questions for genuine ambiguity. No code bodies, no diffs, no implementation detail: F's judgment is expensive, so it's spent on *what and why*, never *how*. Soft budget ~600 output tokens.
 
 **Stage O — PLAN** (`references/prompts/plan.md`). Resolves every FIND into PLAN records: operation, locator+anchor, and citations (`ref=`) for the definition site and call sites of everything touched — Opus greps to ground each edit in the real code, so S never has to re-discover context. Carries a `test=` command per item and `order=` for dependencies. Payload blocks only for code that must be authored; where S can write it from the spec, mark `fill=S` and skip the payload.
 
@@ -89,9 +91,9 @@ O replies with `RES R1->E1 verdict=respec` plus P2b (delete the import first) an
 
 ## Running it
 
-**Claude Code (primary target).** Install `assets/claude-code/agents/*.md` into `.claude/agents/` and `assets/claude-code/commands/cascade.md` into `.claude/commands/`, then `/cascade <task>`. The main thread is the orchestrator: it spawns cascade-analyze → cascade-plan → cascade-execute sequentially via Task, each subagent pinned to its tier's model. Subagents can't nest, so the orchestrator mediates: after S returns, it hands any `st=deleg` items to cascade-assist and any ESC records to the correct senior agent — passing *only* those records — then feeds RES respecs back to a fresh cascade-execute. It also meters every spawn into `cascade/usage.json` and closes with `scripts/cascade_cost.py`, which prices the run and reports savings vs a single-model baseline two ways (fact-grade reprice floor; modeled counterfactual — see `references/economics.md`). If your plan lacks Fable access, point cascade-analyze's `model:` at `claude-opus-4-8`.
+**Claude Code (primary target).** Install `assets/claude-code/agents/*.md` into `.claude/agents/` and `assets/claude-code/commands/cascade.md` into `.claude/commands/`, then `/cascade <task>`. The main thread is the orchestrator: for broad-scope tasks it spawns cascade-recon first (its own judgment call — no fixed threshold), then always cascade-analyze → cascade-plan → cascade-execute sequentially via Task, each subagent pinned to its tier's model. Subagents can't nest, so the orchestrator mediates: after S returns, it hands any `st=deleg` items to cascade-assist and any ESC records to the correct senior agent — passing *only* those records — then feeds RES respecs back to a fresh cascade-execute. It also meters every spawn into `cascade/usage.json` and closes with `scripts/cascade_cost.py`, which prices the run and reports savings vs a single-model baseline two ways (fact-grade reprice floor; modeled counterfactual — see `references/economics.md`). If your plan lacks Fable access, point cascade-analyze's `model:` at `claude-opus-5`.
 
-**Raw API / your own orchestrator (e.g. Conduit).** One `messages` call per stage: system = the stage prompt from `references/prompts/`, user = the predecessor `.cf` file (plus GIVE extracts as needed), model per the tier map, `max_tokens` near the stage budget. Escalations are a fresh call to the senior tier whose user turn is just the ESC bundle. Here S *can* call H directly — nesting is yours. Record each call's `usage.input_tokens`/`usage.output_tokens` into `cascade/usage.json` (exact splits — better data than Claude Code's totals) and run the same cost script. Omit the `thinking` parameter on `claude-fable-5`.
+**Raw API / your own orchestrator (e.g. Conduit).** One `messages` call per stage: system = the stage prompt from `references/prompts/`, user = the predecessor `.cf` file (plus GIVE extracts as needed), model per the tier map, `max_tokens` near the stage budget. Escalations are a fresh call to the senior tier whose user turn is just the ESC bundle. Here S *can* call H directly — nesting is yours. Record each call's `usage.input_tokens`/`usage.output_tokens` into `cascade/usage.json` (exact splits — better data than Claude Code's totals) and run the same cost script. Omit the `thinking` parameter on `claude-fable-5-1`.
 
 **Claude.ai chat.** No subagents, so the economics don't apply — but the format still does. When asked to "cascade" a task here, run the stages yourself in order, writing each `.cf` artifact, so output stays in the wire format and can be resumed by real tiers later.
 
@@ -103,7 +105,7 @@ Stage F's analysis discipline is the `fable-method` skill (diagnose from evidenc
 
 - `references/format.md` — canonical `.cf` grammar, field vocabulary, full worked run with escalation. The source of truth when any record is ambiguous.
 - `references/economics.md` — rate card, savings decomposition, the modeled example, when the cascade loses, and the `usage.json` measurement spec.
-- `references/prompts/{analyze,plan,execute,assist}.md` — self-contained stage playbooks; use verbatim as system prompts.
+- `references/prompts/{recon,analyze,plan,execute,assist}.md` — self-contained stage playbooks; use verbatim as system prompts. `recon.md` is optional and only invoked for broad-scope tasks.
 - `scripts/cascade_cost.py` — stdlib-only cost report: prices `cascade/usage.json` against the rate card (auto-switches Sonnet intro→standard by date), writes back floor/modeled savings vs a baseline, and appends every run to the cross-repo ledger (`~/.cascade/runs.jsonl`).
 - `scripts/cascade_stats.py` — fleet efficiency over the ledger: spend and savings totals, cost per landed change, token share by tier, escalation why-code histogram, stage-budget adherence, trend, and measured multipliers once `--kind baseline` runs exist.
 - `assets/claude-code/` — drop-in subagent definitions and the `/cascade` command.

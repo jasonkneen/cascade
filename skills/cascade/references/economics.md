@@ -15,6 +15,7 @@ Cache hits price at ~10% of the input rate; batch halves both. One erosion facto
 
 ## Where the savings come from, in order of size
 
+0. **Recon offload (large-scope tasks only).** A whole-codebase task with no recon pass makes Stage F do its own Glob/Grep/Read discovery at Fable's rate ($10/MTok in) — a real run analysing an entire repo cost $2.96 on 289k input tokens, almost all of it exploration rather than judgment. Stage R (Haiku, $1/MTok) does the same discovery for ~1/10th the per-token price and hands F a curated shortlist instead of an empty repo. Only pays off above a few dozen files' worth of scope; skip it for bounded diffs, where F's own reads are already cheap.
 1. **Tier arbitrage.** The high-turn execution loop — file reads, tool churn, code authoring — is where most tokens live, and the cascade bills it at S/H rates instead of F/O. Fable:Sonnet is 5x on both sides; Fable:Haiku is 10x. This is the biggest lever.
 2. **Snowball capping.** A single long session re-sends its growing transcript every turn; even cache-discounted, effective input lands several times the sum of the cascade's four short, fresh stage contexts. Reference-not-reproduce compounds this: every block a stage doesn't quote is input the next stage never pays for.
 3. **Format compression.** ~35–40% fewer output tokens — no narration, no summaries, each region authored exactly once instead of echoed in plan, edit, and recap. Real, but keep it in proportion: output is ~3% of a run's tokens and ~12% of its cost.
@@ -73,6 +74,8 @@ The orchestrator appends one entry per spawn to `cascade/usage.json`:
   ]
 }
 ```
+
+Stage letters mirror the tier map (`F O S H`), with one refinement: meter a recon pass as `R` (still Haiku-priced, but the stats report budgets it apart from Haiku *assist*, which shares the tier but has a tighter output budget). When an escalation ends `verdict=take`, give its entry `"counters": {"took": N}` so the senior-executed change counts as landed — otherwise `cost_per_landed` is inflated by changes that did land.
 
 Two data grades, prefer the first:
 - **API mode**: record each call's `usage.input_tokens` / `usage.output_tokens` — exact splits.

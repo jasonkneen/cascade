@@ -27,7 +27,7 @@ except ImportError:
 
 LEDGER_ENV = "CASCADE_LOG"
 LEDGER_DEFAULT = os.path.join(os.path.expanduser("~"), ".cascade", "runs.jsonl")
-BUDGETS = {"F": 600, "O": 1200, "S": 400, "H": 200}  # soft out-token budgets
+BUDGETS = {"R": 500, "F": 600, "O": 1200, "S": 400, "H": 200}  # soft out-token budgets
 TIER_OF = {"fable": "F", "opus": "O", "sonnet": "S", "haiku": "H"}
 
 
@@ -56,6 +56,7 @@ def unit_econ(runs):
     spend = sum(r["totals"]["cost_usd"] for r in runs)
     items = sum(r.get("counters", {}).get("plan", 0) for r in runs)
     landed = sum(r.get("counters", {}).get("ok", 0) + r.get("counters", {}).get("adapt", 0)
+                 + r.get("counters", {}).get("took", 0)
                  for r in runs)
     esc = sum(sum((r.get("esc_why") or {}).values()) for r in runs)
     return spend, items, landed, esc
@@ -144,7 +145,7 @@ def main():
         "tokens": {"in": tin, "out": tout},
         "by_tier": {t: {"in": v[0], "out": v[1], "cost_usd": round(v[2], 2),
                         "cost_share": round(v[2] / spend, 2) if spend else None}
-                    for t, v in sorted(by_tier.items(), key=lambda kv: "FOSH?".find(kv[0]))},
+                    for t, v in sorted(by_tier.items(), key=lambda kv: "RFOSH?".find(kv[0]))},
         "unit_economics": {
             "plan_items": items, "landed": landed, "blocked": blk,
             "landed_rate": round(landed / items, 2) if items else None,
@@ -157,7 +158,7 @@ def main():
         "delegated_items": deleg,
         "avg_stage_out_vs_budget": {
             t: {"avg_out": round(statistics.mean(v)), "soft_budget": BUDGETS[t]}
-            for t, v in sorted(stage_out.items(), key=lambda kv: "FOSH".find(kv[0]))},
+            for t, v in sorted(stage_out.items(), key=lambda kv: "RFOSH".find(kv[0]))},
         "trend_all_vs_recent": trend,
         "measured_multipliers": measured,
     }

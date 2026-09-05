@@ -19,7 +19,7 @@ Nothing else. No markdown, no blank-line padding, no code fences, no restating w
 TYPE id[<-parent | ->target] key=value key="value with spaces" key=[a,b,c]
 ```
 
-- **ids**: stage letter + integer — `F3 P7 C7 E1 R1 N2 G2 Q1`. Respecs suffix a letter: `P2b`. Ids are immutable once emitted.
+- **ids**: stage letter + integer — `F3 P7 C7 E1 R1 N2 G2 Q1 M2 K4`. Respecs suffix a letter: `P2b`. Ids are immutable once emitted.
 - **lineage**: `<-` chains downstream (`P4<-F2`, `C4<-P4`); `->` points a reply at what it answers (`R1->E1`, `G2->N2`). Lineage lets any tier trace an item back to the original finding without reading history.
 - **values**: bare if no whitespace; double-quoted otherwise; lists as `[a,b,c]`. Omit keys whose value is empty or default — absence is information.
 - **forward compat**: readers ignore keys they don't recognise; never fail on one.
@@ -36,6 +36,18 @@ path:start-end       src/auth/session.ts:44-51
 The anchor is the exact text of the first line of the target region, ≤80 chars, and it wins: when line numbers have drifted, relocate by anchor and report `drift=±n`. Quote at most one anchor line per locator — the executor has the file; it needs a fingerprint, not a copy.
 
 ## Record types
+
+**MAP** — Stage R (optional, haiku tier). Subsystem inventory, one per area in scope.
+```
+MAP server at=server/,shared/ what="fly-hosted backend + shared security core"
+```
+Replaces Stage F's own directory discovery when recon ran. No judgment — a location and a one-line role, nothing about whether it's fine or broken.
+
+**HIT** — Stage R (optional). A pattern-match candidate, not a verdict.
+```
+HIT secret-fallback at=netlify/functions/backend.mjs:331#"function getAuthSecret() {" pat="env fallback chain"
+```
+`pat` names what matched, never why it might be a problem — that's Stage F's call, made by reading the actual code at the locator. Expect noise: some HITs are false positives or already-handled; Stage F verifies before promoting one to a FIND.
 
 **FIND** — Stage F. One per issue worth acting on.
 ```
@@ -87,10 +99,12 @@ Seniors NEED; H (or the caller) GIVEs. This is how an expensive model reads thre
 
 **DONE** — terminator, always last.
 ```
+DONE stage=H map=4 hit=9 tok~=380
 DONE stage=F find=3 open=1 tok~=220
 DONE stage=O plan=5 tok~=800
 DONE stage=S ok=4 adapt=1 blk=1 deleg=2 esc=1 tok~=520
 ```
+Recon and Assist share the `H` stage letter (both run on the haiku tier); the counters present (`map=`/`hit=` vs `ok=`/`blk=`) disambiguate which job produced the line.
 
 ## Payload blocks
 
@@ -108,6 +122,7 @@ verbatim new content
 | Thing | Cap |
 |---|---|
 | HUMAN line | 20 words |
+| Stage R output | ~500 tokens (optional, large-scope only) |
 | Stage F output | ~600 tokens |
 | Stage O output | ~1200 tokens + payloads |
 | Stage S records | ~400 tokens (payloads exempt) |
